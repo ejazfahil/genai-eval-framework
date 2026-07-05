@@ -3,17 +3,28 @@
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
 ![Anthropic](https://img.shields.io/badge/Anthropic-Claude-D97757?logo=anthropic&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-local%20models-000000?logo=ollama&logoColor=white)
-![Status](https://img.shields.io/badge/status-scaffolding-orange)
+[![CI](https://github.com/ejazfahil/genai-eval-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/ejazfahil/genai-eval-framework/actions/workflows/ci.yml)
+![Status](https://img.shields.io/badge/status-runs%20end--to--end-brightgreen)
 
 A small, provider-agnostic framework for benchmarking large language models
 through a common adapter interface, with parallel evaluation and on-disk response
 caching so runs are fast and reproducible.
 
-> **Status:** scaffolding / design blueprint. The model adapters, the parallel
-> MMLU evaluator, and the cache are implemented and the cache is unit-tested. The
-> shared base classes (`BaseEvaluator`, `BaseModelAdapter`) that the concrete
-> components subclass are the next pieces to land — see
-> [Architecture](#architecture--how-it-works) and [Roadmap](#roadmap).
+> **Status: runs end-to-end.** Adapters, the base classes, the parallel MMLU
+> evaluator, and the content-addressed cache are implemented and tested; the harness
+> produces **real MMLU numbers** on local models (committed under `results/`).
+>
+> **TL;DR (for reviewers).** A provider-agnostic LLM-eval harness — uniform model
+> adapters (Ollama / Anthropic), a parallel MMLU evaluator, and a SHA-256 response
+> cache for free, reproducible re-runs. Measured on 120 seeded MMLU questions
+> (`temperature=0`), a local **qwen3:8b scores 0.675** vs **llama3.2:3b 0.525**
+> (random = 0.25) — every number from a real run, no fabricated figures.
+>
+> | MMLU · N=120 · seed 42 · temp 0 | Accuracy |
+> |---|:---:|
+> | 🟢 qwen3:8b (local) | **0.675** |
+> | ⚪ llama3.2:3b (local) | 0.525 |
+> | random baseline | 0.25 |
 
 ---
 
@@ -101,18 +112,23 @@ hit returns the stored payload — making re-runs deterministic and free.
 
 ```
 genai-eval-framework/
+├── run_eval.py                  # CLI: run MMLU over models → results/mmlu_leaderboard.json
+├── requirements.txt             # datasets + pytest
 ├── src/
+│   ├── base_evaluator.py        # BaseEvaluator: dataset + parse + aggregate contract
 │   ├── evaluators/
-│   │   └── mmlu.py               # MMLUEvaluator: parallel run + accuracy aggregate
+│   │   └── mmlu.py               # MMLUEvaluator: real cais/mmlu, parallel, per-subject
 │   ├── models/
+│   │   ├── base_adapter.py       # BaseModelAdapter: uniform complete() + cache glue
 │   │   ├── anthropic_adapter.py  # Claude via the anthropic SDK
 │   │   └── ollama_adapter.py     # local models via the Ollama HTTP API
 │   └── utils/
 │       └── cache.py              # EvalCache: sha256((prompt, model)) → JSON
 ├── tests/
 │   └── test_utils.py            # cache hit/miss behavior (tempdir-isolated)
+├── results/                     # committed leaderboard JSON + plots (measured)
 └── docs/
-    └── BENCHMARKS.md            # reference leaderboard numbers (see note below)
+    └── BENCHMARKS.md            # measured MMLU results + reproduce command
 ```
 
 ---
@@ -130,33 +146,47 @@ genai-eval-framework/
 
 ## Results
 
-This repository is an **evaluation harness, not a published benchmark run**. The
-MMLU evaluator currently loads a small built-in stub dataset for wiring/tests, so
-it does not yet produce headline accuracy figures.
+Real MMLU results from this harness on local models (Ollama, free), committed under
+`results/`. **120 questions, seed 42, `temperature=0`**, sampled across 8 MMLU subjects.
 
-> **Note on `docs/BENCHMARKS.md`:** that file lists *illustrative reference
-> leaderboard numbers* (e.g. for frontier API models) to document the intended
-> output format. They are **not** measurements produced by this code and are not
-> claimed as results of this project.
+| Model | MMLU accuracy | n | Provider |
+|-------|:-------------:|:-:|----------|
+| **qwen3:8b** | **0.675** | 120 | Ollama (local) |
+| llama3.2:3b | 0.525 | 120 | Ollama (local) |
+
+Random baseline = 0.25; both models clear it comfortably, and the 8B model shows a clear edge over the 3B one.
+
+![MMLU accuracy — local models](results/plots/mmlu_accuracy.png)
+
+![MMLU accuracy by subject](results/plots/mmlu_by_subject.png)
+
+Per-subject the gap is uneven — both models are strong on `computer_security` and `professional_medicine` and weak on `machine_learning` / `high_school_mathematics` — exactly the signal a per-subject harness exists to surface. Full numbers in [`results/mmlu_leaderboard.json`](results/mmlu_leaderboard.json); reproduce command in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+
+> **Integrity note:** an earlier `docs/BENCHMARKS.md` listed illustrative frontier-model figures that were **not** produced by this code. They have been removed — only measured numbers are reported here.
 
 ---
 
 ## Getting Started
 
 ```bash
-pip install anthropic
-python -m pytest tests/ -q          # cache unit tests
+pip install -r requirements.txt
+python -m pytest tests/ -q                 # unit tests
 
-export ANTHROPIC_API_KEY=sk-...     # for the Claude adapter
-# ollama serve                       # for the local adapter (separate process)
+# Free & local — needs Ollama running (`ollama serve`) with the models pulled:
+python run_eval.py --models llama3.2:3b,qwen3:8b --n 120 --seed 42
+
+# Hosted (needs ANTHROPIC_API_KEY):
+python run_eval.py --provider anthropic --models claude-3-haiku-20240307 --n 120
 ```
 
+Or from Python:
+
 ```python
-from src.models.anthropic_adapter import AnthropicAdapter
+from src.models.ollama_adapter import OllamaAdapter
 from src.evaluators.mmlu import MMLUEvaluator
 
-model = AnthropicAdapter(model="claude-3-haiku-20240307")
-acc = MMLUEvaluator(model).run(max_samples=50)   # {"accuracy": ...}
+model = OllamaAdapter(model="llama3.2:3b")
+print(MMLUEvaluator(model).run(max_samples=50, seed=42))  # {"accuracy": ..., "by_subject": {...}}
 ```
 
 ---
@@ -172,16 +202,22 @@ acc = MMLUEvaluator(model).run(max_samples=50)   # {"accuracy": ...}
 
 ## Roadmap
 
-- Ship the `BaseEvaluator` / `BaseModelAdapter` base classes the concrete
-  components subclass (the abstract `complete()` / caching glue).
-- Wire the real MMLU dataset (HuggingFace `datasets`) behind `load_dataset()`.
+- ✅ `BaseEvaluator` / `BaseModelAdapter` base classes with the `complete()` + cache glue.
+- ✅ Real MMLU dataset (`cais/mmlu`) wired behind `load_dataset()` with per-subject scoring, plus a `run_eval.py` CLI and committed results.
 - Add HumanEval / GSM8K evaluators reusing the same adapter contract.
 - Integrate the cache into the adapter call path automatically.
 - Temperature/seed pinning and per-run metadata for fully reproducible reports.
 
 ## Conclusion
 
-`genai-eval-framework` is the skeleton of a clean, provider-agnostic LLM
-evaluation stack: uniform adapters, parallel scoring, and a content-addressed
-cache. The plumbing is in place; the next step is the shared base layer and a real
-dataset behind the evaluator.
+`genai-eval-framework` is a clean, provider-agnostic LLM evaluation stack — uniform
+adapters, parallel scoring, and a content-addressed cache — now **running end-to-end**
+with real MMLU numbers (qwen3:8b **0.675** vs llama3.2:3b **0.525** on a seeded
+120-question slice, `temperature=0`).
+
+**What this project demonstrates (for reviewers):** the moving parts of a real eval
+platform — a uniform adapter contract (local Ollama + hosted Claude), a parallel
+evaluator with strict answer parsing (including reasoning-model handling via
+`think=false`), a SHA-256 response cache for free/deterministic re-runs, and honest
+reporting: measured numbers committed, small samples flagged, and fabricated
+reference figures removed. Next up: HumanEval / GSM8K evaluators on the same contract.

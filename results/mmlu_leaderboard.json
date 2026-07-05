@@ -1,0 +1,104 @@
+{
+  "meta": {
+    "benchmark": "MMLU (cais/mmlu, test split)",
+    "subjects": [
+      "machine_learning",
+      "computer_security",
+      "college_computer_science",
+      "high_school_mathematics",
+      "anatomy",
+      "professional_medicine",
+      "high_school_macroeconomics",
+      "philosophy"
+    ],
+    "n_per_model": 120,
+    "seed": 42,
+    "temperature": 0.0,
+    "python": "3.14.5",
+    "platform": "macOS-27.0-arm64-arm-64bit-Mach-O"
+  },
+  "leaderboard": [
+    {
+      "accuracy": 0.675,
+      "n": 120,
+      "by_subject": {
+        "anatomy": {
+          "accuracy": 0.75,
+          "n": 8
+        },
+        "college_computer_science": {
+          "accuracy": 0.3333,
+          "n": 3
+        },
+        "computer_security": {
+          "accuracy": 0.8333,
+          "n": 12
+        },
+        "high_school_macroeconomics": {
+          "accuracy": 0.7917,
+          "n": 24
+        },
+        "high_school_mathematics": {
+          "accuracy": 0.4,
+          "n": 25
+        },
+        "machine_learning": {
+          "accuracy": 0.4286,
+          "n": 7
+        },
+        "philosophy": {
+          "accuracy": 0.72,
+          "n": 25
+        },
+        "professional_medicine": {
+          "accuracy": 0.875,
+          "n": 16
+        }
+      },
+      "model": "qwen3:8b",
+      "provider": "ollama",
+      "seconds": 121.0
+    },
+    {
+      "accuracy": 0.525,
+      "n": 120,
+      "by_subject": {
+        "anatomy": {
+          "accuracy": 0.5,
+          "n": 8
+        },
+        "college_computer_science": {
+          "accuracy": 0.3333,
+          "n": 3
+        },
+        "computer_security": {
+          "accuracy": 0.6667,
+          "n": 12
+        },
+        "high_school_macroeconomics": {
+          "accuracy": 0.4583,
+          "n": 24
+        },
+        "high_school_mathematics": {
+          "accuracy": 0.44,
+          "n": 25
+        },
+        "machine_learning": {
+          "accuracy": 0.1429,
+          "n": 7
+        },
+        "philosophy": {
+          "accuracy": 0.68,
+          "n": 25
+        },
+        "professional_medicine": {
+          "accuracy": 0.625,
+          "n": 16
+        }
+      },
+      "model": "llama3.2:3b",
+      "provider": "ollama",
+      "seconds": 85.5
+    }
+  ]
+}

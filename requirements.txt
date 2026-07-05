@@ -1,0 +1,4 @@
+# Runtime for the local MMLU benchmark + tests.
+# The hosted Claude adapter additionally needs:  pip install anthropic
+datasets>=2.19.0
+pytest>=8.0.0
